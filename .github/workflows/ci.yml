@@ -15,6 +15,6 @@ jobs:
     uses: jstz-dev/jstz/.github/workflows/docker.yml@huanchengchang/jstz-961
     with:
       ref: huanchengchang/jstz-961
-      octez_version: 23.2
+      octez_version: 20.3
       dry_run: true
     secrets: inherit
