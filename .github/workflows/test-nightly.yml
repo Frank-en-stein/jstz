@@ -73,4 +73,4 @@ jobs:
 
   runtime_api_coverage:
     name: Runtime API coverage
-    uses: jstz-dev/jstz/.github/workflows/runtime-api-coverage.yml@main
+    uses: jstz-dev/jstz/.github/workflows/runtime-api-coverage.yml@huanchengchang/jstz-941-3
