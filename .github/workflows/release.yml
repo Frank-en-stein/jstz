@@ -64,6 +64,7 @@ jobs:
     with:
       deploy_report: ${{ !inputs.dry_run }}
       build_ref: ${{ inputs.ref }}
+    secrets: inherit
 
   deploy_docs:
     name: Deploy docs
@@ -71,3 +72,4 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       dry_run: ${{ inputs.dry_run }}
+    secrets: inherit

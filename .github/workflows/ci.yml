@@ -15,5 +15,6 @@ jobs:
     uses: jstz-dev/jstz/.github/workflows/release.yml@huanchengchang/jstz-941-3
     with:
       dry_run: true
+      octez_version: 23.2
       ref: huanchengchang/jstz-941-3
     secrets: inherit
