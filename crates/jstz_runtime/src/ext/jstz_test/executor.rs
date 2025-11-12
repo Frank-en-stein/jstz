@@ -1,3 +1,5 @@
+// Copyright 2018-2025 the Deno authors. MIT license.
+
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use deno_core::{
@@ -191,6 +193,7 @@ pub async fn test_specifier(
         let earlier = Instant::now();
         let mut before_each_hook_errored = false;
 
+        // Execute beforeEach hooks (FIFO order)
         call_hooks(
             runtime,
             test_hooks.before_each.iter(),
@@ -207,6 +210,7 @@ pub async fn test_specifier(
         )
         .await?;
 
+        // Skip test if beforeEach hook errored
         let result = if !before_each_hook_errored {
             let call = runtime.call(test_fn);
             let result = runtime
@@ -238,10 +242,9 @@ pub async fn test_specifier(
             event_tracker.result(desc, result.clone(), earlier.elapsed())?;
         }
 
-        call_hooks(
-            runtime,
-            test_hooks.after_each.iter(),
-            |core_error| match core_error {
+        // Execute afterEach hooks (LIFO order)
+        call_hooks(runtime, test_hooks.after_each.iter().rev(), |core_error| {
+            match core_error {
                 CoreError::Js(err) => {
                     let test_result =
                         TestResult::Failed(TestFailure::JsError(Box::new(err)));
@@ -249,8 +252,8 @@ pub async fn test_specifier(
                     Ok(())
                 }
                 err => Err(err.into()),
-            },
-        )
+            }
+        })
         .await?;
 
         if matches!(result, TestResult::Failed(_)) {

@@ -137,6 +137,53 @@ pub enum TestFailure {
     HasSanitizersAndOverlaps(IndexSet<String>), // Long names of overlapped tests
 }
 
+impl TestFailure {
+    pub fn error_location(&self) -> Option<TestLocation> {
+        let TestFailure::JsError(js_error) = self else {
+            return None;
+        };
+        // The first line of user code comes above the test file.
+        // The call stack usually contains the top 10 frames, and cuts off after that.
+        // We need to explicitly check for the test runner here.
+        // - Checking for a `ext:` is not enough, since other Deno `ext:`s can appear in the call stack.
+        // - This check guarantees that the next frame is inside of the Deno.test(),
+        //   and not somewhere else.
+        const TEST_RUNNER: &str = "ext:cli/40_test.js";
+        let runner_frame_index = js_error
+            .frames
+            .iter()
+            .position(|f| f.file_name.as_deref() == Some(TEST_RUNNER))?;
+        let frame = js_error
+            .frames
+            .split_at(runner_frame_index)
+            .0
+            .iter()
+            .rfind(|f| {
+                f.file_name.as_ref().is_some_and(|f| {
+                    f.starts_with("file:") && !f.contains("node_modules")
+                })
+            })?;
+        let file_name = frame.file_name.as_ref()?.clone();
+        // Turn into zero based indices
+        let line_number = frame.line_number.map(|v| v - 1)? as u32;
+        let column_number = frame.column_number.map(|v| v - 1).unwrap_or(0) as u32;
+        Some(TestLocation {
+            file_name,
+            line_number,
+            column_number,
+        })
+    }
+
+    pub fn hide_in_summary(&self) -> bool {
+        // These failure variants are hidden in summaries because they are caused
+        // by child errors that will be summarized separately.
+        matches!(
+            self,
+            TestFailure::FailedSteps(_) | TestFailure::IncompleteSteps
+        )
+    }
+}
+
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -315,7 +362,7 @@ impl TestEventReceiver {
     }
 }
 
-pub(crate) fn create_test_event_channel() -> (TestEventSender, TestEventReceiver) {
+pub fn create_test_event_channel() -> (TestEventSender, TestEventReceiver) {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let sender = TestEventSender { id: 0, sender: tx };
     let receiver = TestEventReceiver { receiver: rx };
