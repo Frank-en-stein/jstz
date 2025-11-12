@@ -27,11 +27,6 @@ on:
         description: Kernel artifact name
         required: true
         type: string
-      lightweight_kernel_artifact_name:
-        description: Lightweight kernel artifact name
-        required: false
-        type: string
-        default: lightweight-kernel-executable
       dry_run:
         description: Dry-run image build without pushing to the registry
         type: boolean
@@ -51,7 +46,7 @@ jobs:
       packages: write
     steps:
       - name: Build
-        uses: jstz-dev/jstz/.github/actions/build-docker-image@alan/just-lw-kernel
+        uses: jstz-dev/jstz/.github/actions/build-docker-image@main
         with:
           platform: linux
           arch: arm64
@@ -64,7 +59,6 @@ jobs:
           image: ${{ inputs.image }}
           dockerfile: ${{ inputs.dockerfile }}
           kernel_artefact_name: ${{ inputs.kernel_artifact_name }}
-          lightweight_kernel_artefact_name: ${{ inputs.lightweight_kernel_artifact_name }}
           dry_run: ${{ inputs.dry_run }}
   build-docker-amd64:
     name: Build (Docker amd64)
@@ -74,7 +68,7 @@ jobs:
       packages: write
     steps:
       - name: Build
-        uses: jstz-dev/jstz/.github/actions/build-docker-image@alan/just-lw-kernel
+        uses: jstz-dev/jstz/.github/actions/build-docker-image@main
         with:
           platform: linux
           arch: amd64
@@ -87,7 +81,6 @@ jobs:
           image: ${{ inputs.image }}
           dockerfile: ${{ inputs.dockerfile }}
           kernel_artefact_name: ${{ inputs.kernel_artifact_name }}
-          lightweight_kernel_artefact_name: ${{ inputs.lightweight_kernel_artifact_name }}
           dry_run: ${{ inputs.dry_run }}
   merge:
     runs-on: ubuntu-latest
