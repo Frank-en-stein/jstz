@@ -8,8 +8,8 @@ use jstz_api::http::{
     request::{Request, RequestClass},
     response::{Response, ResponseBuilder, ResponseClass, ResponseOptions},
 };
-use jstz_core::{native::JsNativeObject, runtime, Runtime};
-use std::ops::Deref;
+use jstz_core::{host_defined, native::JsNativeObject, runtime, Runtime};
+use std::{cell::RefCell, ops::Deref, rc::Rc};
 
 use crate::{
     context::account::{Account, Address, Addressable},
@@ -22,7 +22,7 @@ use crate::{
 };
 
 use super::{
-    api::{ProtocolApi, WebApi},
+    api::{ProtocolApi, ProtocolData, WebApi},
     host_script::HostScript,
     script::{ParsedCode, Script},
 };
@@ -176,12 +176,31 @@ pub fn fetch(
                             ))
                         })?;
 
-                    log_request_start(dest_address.clone(), operation_hash.to_string());
+                    // Check if we're in a nested call (ProtocolData exists) or root call
+                    let (call_sequence, depth, call_id) = {
+                        host_defined!(context, host_defined);
+                        if let Some(proto_data) = host_defined.get::<ProtocolData>() {
+                            // Nested call: use existing ProtocolData
+                            let call_seq = *proto_data.call_sequence.borrow();
+                            let call_id = format!("{}:{}", operation_hash, call_seq);
+                            (proto_data.call_sequence.clone(), proto_data.depth, call_id)
+                        } else {
+                            // Root call: create new ProtocolData
+                            let call_sequence = Rc::new(RefCell::new(0u64));
+                            let depth = 0u8;
+                            let call_id = format!("{}:0", operation_hash);
+                            (call_sequence, depth, call_id)
+                        }
+                    };
+
+                    log_request_start(call_id.clone(), dest_address.clone(), depth);
                     let response = Script::load_init_run(
                         &src_code,
                         ProtocolApi {
                             operation_hash: operation_hash.clone(),
                             address: dest_address.clone(),
+                            call_sequence,
+                            depth,
                         },
                         request.inner(),
                         context,
@@ -229,7 +248,7 @@ pub fn fetch(
                         context,
                     );
 
-                    log_request_end(dest_address.clone(), operation_hash.to_string());
+                    log_request_end(call_id, dest_address.clone(), depth);
                     response
                 }
                 _ => {

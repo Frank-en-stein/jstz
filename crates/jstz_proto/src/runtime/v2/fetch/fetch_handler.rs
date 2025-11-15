@@ -744,19 +744,23 @@ fn log_event(
         match event {
             LogEvent::RequestStart(address) => {
                 if let Address::SmartFunction(smart_function_addr) = &address {
+                    // V2 runtime: use operation hash as call_id with sequence 0 and depth 0
                     log_request_start_with_host(
                         host,
+                        format!("{}:0", op),
                         smart_function_addr.clone(),
-                        op.to_string(),
+                        0,
                     )
                 }
             }
             LogEvent::RequestEnd(address) => {
                 if let Address::SmartFunction(smart_function_addr) = &address {
+                    // V2 runtime: use operation hash as call_id with sequence 0 and depth 0
                     log_request_end_with_host(
                         host,
+                        format!("{}:0", op),
                         smart_function_addr.clone(),
-                        op.to_string(),
+                        0,
                     )
                 }
             }

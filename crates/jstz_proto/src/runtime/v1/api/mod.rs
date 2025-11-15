@@ -2,7 +2,7 @@ mod kv;
 mod ledger;
 mod smart_function;
 
-use std::ops::BitXor;
+use std::{cell::RefCell, ops::BitXor, rc::Rc};
 
 use boa_engine::JsData;
 use boa_gc::{Finalize, Trace};
@@ -20,6 +20,8 @@ pub use kv::{Kv, KvValue};
 pub struct ProtocolData {
     pub address: SmartFunctionHash,
     pub operation_hash: OperationHash,
+    pub call_sequence: Rc<RefCell<u64>>,
+    pub depth: u8,
 }
 
 pub struct WebApi;
@@ -40,6 +42,8 @@ impl jstz_core::Api for WebApi {
 pub struct ProtocolApi {
     pub address: SmartFunctionHash,
     pub operation_hash: OperationHash,
+    pub call_sequence: Rc<RefCell<u64>>,
+    pub depth: u8,
 }
 
 impl jstz_core::Api for ProtocolApi {
@@ -50,6 +54,8 @@ impl jstz_core::Api for ProtocolApi {
         host_defined.insert(ProtocolData {
             address: self.address.clone(),
             operation_hash: self.operation_hash.clone(),
+            call_sequence: self.call_sequence.clone(),
+            depth: self.depth,
         });
 
         jstz_api::RandomApi {

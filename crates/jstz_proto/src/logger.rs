@@ -16,13 +16,14 @@ const RESPONSE_PREFIX: &str = "[JSTZ:RESPONSE]";
 #[serde(tag = "type")]
 pub enum RequestEvent {
     Start {
+        call_id: String,
         address: SmartFunctionHash,
-        request_id: String,
+        depth: u8,
     },
     End {
+        call_id: String,
         address: SmartFunctionHash,
-        request_id: String,
-        // TODO: Add more fields
+        depth: u8,
     },
 }
 
@@ -53,40 +54,44 @@ impl Display for ResponseEvent<'_> {
     }
 }
 
-pub fn log_request_start(address: SmartFunctionHash, request_id: String) {
+pub fn log_request_start(call_id: String, address: SmartFunctionHash, depth: u8) {
     runtime::with_js_hrt(|hrt| {
-        log_request_start_with_host(hrt, address, request_id);
+        log_request_start_with_host(hrt, call_id, address, depth);
     });
 }
 
 pub fn log_request_start_with_host(
     hrt: &mut JsHostRuntime<'static>,
+    call_id: String,
     address: SmartFunctionHash,
-    request_id: String,
+    depth: u8,
 ) {
     let request_log = RequestEvent::Start {
+        call_id,
         address,
-        request_id,
+        depth,
     }
     .to_string();
 
     hrt.write_debug(&(REQUEST_START_PREFIX.to_string() + &request_log + "\n"));
 }
 
-pub fn log_request_end(address: SmartFunctionHash, request_id: String) {
+pub fn log_request_end(call_id: String, address: SmartFunctionHash, depth: u8) {
     runtime::with_js_hrt(|hrt| {
-        log_request_end_with_host(hrt, address, request_id);
+        log_request_end_with_host(hrt, call_id, address, depth);
     });
 }
 
 pub fn log_request_end_with_host(
     hrt: &mut JsHostRuntime<'static>,
+    call_id: String,
     address: SmartFunctionHash,
-    request_id: String,
+    depth: u8,
 ) {
     let request_log = RequestEvent::End {
+        call_id,
         address,
-        request_id,
+        depth,
     }
     .to_string();
 
@@ -131,15 +136,16 @@ mod tests {
             &mut Transaction::default(),
             || {
                 super::log_request_start(
+                    "op123:0".to_string(),
                     SmartFunctionHash::from_base58(
                         "KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9",
                     )
                     .unwrap(),
-                    "start_request".to_string(),
+                    0,
                 )
             },
         );
-        assert_eq!(String::from_utf8(buf.lock().unwrap().to_vec()).unwrap(), "[JSTZ:SMART_FUNCTION:REQUEST_START] {\"type\":\"Start\",\"address\":\"KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9\",\"request_id\":\"start_request\"}\n");
+        assert_eq!(String::from_utf8(buf.lock().unwrap().to_vec()).unwrap(), "[JSTZ:SMART_FUNCTION:REQUEST_START] {\"type\":\"Start\",\"call_id\":\"op123:0\",\"address\":\"KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9\",\"depth\":0}\n");
     }
 
     #[test]
@@ -150,11 +156,12 @@ mod tests {
         host.set_debug_handler(sink);
         super::log_request_start_with_host(
             &mut JsHostRuntime::new(&mut host),
+            "op456:1".to_string(),
             SmartFunctionHash::from_base58("KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9")
                 .unwrap(),
-            "foobar".to_string(),
+            1,
         );
-        assert_eq!(String::from_utf8(buf.lock().unwrap().to_vec()).unwrap(), "[JSTZ:SMART_FUNCTION:REQUEST_START] {\"type\":\"Start\",\"address\":\"KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9\",\"request_id\":\"foobar\"}\n");
+        assert_eq!(String::from_utf8(buf.lock().unwrap().to_vec()).unwrap(), "[JSTZ:SMART_FUNCTION:REQUEST_START] {\"type\":\"Start\",\"call_id\":\"op456:1\",\"address\":\"KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9\",\"depth\":1}\n");
     }
 
     #[test]
@@ -168,15 +175,16 @@ mod tests {
             &mut Transaction::default(),
             || {
                 super::log_request_end(
+                    "op123:0".to_string(),
                     SmartFunctionHash::from_base58(
                         "KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9",
                     )
                     .unwrap(),
-                    "end_request".to_string(),
+                    0,
                 )
             },
         );
-        assert_eq!(String::from_utf8(buf.lock().unwrap().to_vec()).unwrap(), "[JSTZ:SMART_FUNCTION:REQUEST_END] {\"type\":\"End\",\"address\":\"KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9\",\"request_id\":\"end_request\"}\n");
+        assert_eq!(String::from_utf8(buf.lock().unwrap().to_vec()).unwrap(), "[JSTZ:SMART_FUNCTION:REQUEST_END] {\"type\":\"End\",\"call_id\":\"op123:0\",\"address\":\"KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9\",\"depth\":0}\n");
     }
 
     #[test]
@@ -187,11 +195,12 @@ mod tests {
         host.set_debug_handler(sink);
         super::log_request_end_with_host(
             &mut JsHostRuntime::new(&mut host),
+            "op456:1".to_string(),
             SmartFunctionHash::from_base58("KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9")
                 .unwrap(),
-            "foobar".to_string(),
+            1,
         );
-        assert_eq!(String::from_utf8(buf.lock().unwrap().to_vec()).unwrap(), "[JSTZ:SMART_FUNCTION:REQUEST_END] {\"type\":\"End\",\"address\":\"KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9\",\"request_id\":\"foobar\"}\n");
+        assert_eq!(String::from_utf8(buf.lock().unwrap().to_vec()).unwrap(), "[JSTZ:SMART_FUNCTION:REQUEST_END] {\"type\":\"End\",\"call_id\":\"op456:1\",\"address\":\"KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9\",\"depth\":1}\n");
     }
 
     #[test]
@@ -211,16 +220,17 @@ mod tests {
 
     #[test]
     fn log_request_try_from_string() {
-        let json = r#"{"type":"Start","address":"KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9","request_id":"start_request"}"#;
+        let json = r#"{"type":"Start","call_id":"op123:0","address":"KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9","depth":0}"#;
         let event = super::RequestEvent::try_from_string(json).unwrap();
         assert_eq!(
             event,
             super::RequestEvent::Start {
+                call_id: "op123:0".to_string(),
                 address: SmartFunctionHash::from_base58(
                     "KT1D5U6oBmtvYmjBtjzR5yPbrzxw8fa2kCn9"
                 )
                 .unwrap(),
-                request_id: "start_request".to_string(),
+                depth: 0,
             }
         );
     }
