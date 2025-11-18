@@ -4,6 +4,7 @@ import * as webidl from "ext:deno_webidl/00_webidl.js";
 import jstzConsole from "ext:jstz_console/console.js";
 import * as url from "ext:deno_url/00_url.js";
 import * as urlPattern from "ext:deno_url/01_urlpattern.js";
+import * as crypto from "ext:deno_crypto/00_crypto.js";
 import * as jstzKv from "ext:jstz_kv/kv.js";
 
 // https://developer.mozilla.org/en-US/docs/Web/API/WorkerGlobalScope
@@ -196,6 +197,7 @@ const workerGlobalScope = {
     throw new NotSupported("'clearTimeout()' is not supported");
   }),
   console: core.propNonEnumerable(jstzConsole),
+  crypto: core.propNonEnumerable(crypto.crypto),
   fetch: core.propWritable(fetch.fetch),
   location: location.workerLocationDescriptor,
   performance: core.propWritable(performance.performance),
