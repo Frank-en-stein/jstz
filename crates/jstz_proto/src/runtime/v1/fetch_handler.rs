@@ -178,18 +178,36 @@ pub fn fetch(
 
                     // Check if we're in a nested call (ProtocolData exists) or root call
                     let (call_sequence, depth, call_id) = {
-                        host_defined!(context, host_defined);
-                        if let Some(proto_data) = host_defined.get::<ProtocolData>() {
-                            // Nested call: use existing ProtocolData
-                            let call_seq = *proto_data.call_sequence.borrow();
-                            let call_id = format!("{}:{}", operation_hash, call_seq);
-                            (proto_data.call_sequence.clone(), proto_data.depth, call_id)
-                        } else {
-                            // Root call: create new ProtocolData
-                            let call_sequence = Rc::new(RefCell::new(0u64));
-                            let depth = 0u8;
-                            let call_id = format!("{}:0", operation_hash);
-                            (call_sequence, depth, call_id)
+                        // Extract data from ProtocolData if it exists
+                        let extracted = {
+                            host_defined!(context, host_defined);
+                            host_defined.get::<ProtocolData>().map(|proto_data| {
+                                // Nested call: extract all needed data
+                                (
+                                    proto_data.call_sequence.clone(),
+                                    proto_data.depth,
+                                    *proto_data.call_sequence.borrow(),
+                                )
+                            })
+                        }; // host_defined temporary dropped here
+
+                        // Build final values using extracted data
+                        match extracted {
+                            Some((seq_rc, depth_val, seq_num)) => {
+                                (
+                                    seq_rc,
+                                    depth_val,
+                                    format!("{}:{}", operation_hash, seq_num),
+                                )
+                            }
+                            None => {
+                                // Root call: create new ProtocolData
+                                (
+                                    Rc::new(RefCell::new(0u64)),
+                                    0u8,
+                                    format!("{}:0", operation_hash),
+                                )
+                            }
                         }
                     };
 

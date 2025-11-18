@@ -5,7 +5,7 @@ mod smart_function;
 use std::{cell::RefCell, ops::BitXor, rc::Rc};
 
 use boa_engine::JsData;
-use boa_gc::{Finalize, Trace};
+use boa_gc::{empty_trace, Finalize, Trace};
 use jstz_core::host_defined;
 use jstz_crypto::{hash::Hash, smart_function_hash::SmartFunctionHash};
 use kv::KvApi;
@@ -16,12 +16,17 @@ use crate::{operation::OperationHash, runtime::v1::api};
 
 pub use kv::{Kv, KvValue};
 
-#[derive(Trace, Finalize, JsData)]
+#[derive(Finalize, JsData)]
 pub struct ProtocolData {
     pub address: SmartFunctionHash,
     pub operation_hash: OperationHash,
     pub call_sequence: Rc<RefCell<u64>>,
     pub depth: u8,
+}
+
+// Manual Trace implementation since Rc<RefCell<u64>> doesn't implement Trace
+unsafe impl Trace for ProtocolData {
+    empty_trace!();
 }
 
 pub struct WebApi;

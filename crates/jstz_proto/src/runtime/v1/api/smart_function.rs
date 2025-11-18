@@ -97,28 +97,40 @@ impl SmartFunctionApi {
         args: &[JsValue],
         context: &mut Context,
     ) -> JsResult<JsValue> {
-        host_defined!(context, host_defined);
-        let parent_data = host_defined
-            .get::<ProtocolData>()
-            .expect("trace data undefined");
+        // Clone all data we need from parent before any mutable borrows
+        let (parent_address, parent_operation_hash, parent_call_sequence, parent_depth) = {
+            host_defined!(context, host_defined);
+            let parent_data = host_defined
+                .get::<ProtocolData>()
+                .expect("trace data undefined");
+
+            (
+                parent_data.address.clone(),
+                parent_data.operation_hash.clone(),
+                parent_data.call_sequence.clone(),
+                parent_data.depth,
+            )
+        };
 
         // Increment call sequence for this nested call
-        let call_seq = {
-            let mut seq = parent_data.call_sequence.borrow_mut();
+        {
+            let mut seq = parent_call_sequence.borrow_mut();
             *seq += 1;
-            *seq
-        };
+        }
 
         // Create new ProtocolData for the nested call with incremented depth
         let child_data = ProtocolData {
             address: address.clone(),
-            operation_hash: parent_data.operation_hash.clone(),
-            call_sequence: parent_data.call_sequence.clone(), // Share counter
-            depth: parent_data.depth + 1,                      // Increment depth
+            operation_hash: parent_operation_hash.clone(),
+            call_sequence: parent_call_sequence.clone(), // Share counter
+            depth: parent_depth + 1,                      // Increment depth
         };
 
         // Replace parent data with child data in context
-        host_defined.insert(child_data);
+        {
+            host_defined!(context, mut host_defined);
+            host_defined.insert(child_data);
+        }
 
         let request: JsNativeObject<Request> =
             args.get_or_undefined(0).clone().try_into()?;
@@ -126,17 +138,20 @@ impl SmartFunctionApi {
         let result = SmartFunction::call(
             address,
             &request,
-            parent_data.operation_hash.clone(),
+            parent_operation_hash.clone(),
             context,
         );
 
         // Restore parent data after nested call
-        host_defined.insert(ProtocolData {
-            address: parent_data.address.clone(),
-            operation_hash: parent_data.operation_hash.clone(),
-            call_sequence: parent_data.call_sequence.clone(),
-            depth: parent_data.depth,
-        });
+        {
+            host_defined!(context, mut host_defined);
+            host_defined.insert(ProtocolData {
+                address: parent_address,
+                operation_hash: parent_operation_hash,
+                call_sequence: parent_call_sequence,
+                depth: parent_depth,
+            });
+        }
 
         result
     }
