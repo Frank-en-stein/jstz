@@ -32,6 +32,25 @@ This document explores revolutionary product ideas that are **only possible** wi
 - **Automation**: AI agents do the hard work
 - **Accessibility**: Web2 users don't need to understand blockchain
 
+### Enterprise AI Infrastructure: RAG & MCP on jstz
+
+**The Problem**: Companies spend millions on RAG pipelines and AI infrastructure but face:
+- No audit trail of which sources AI actually used
+- Vendor lock-in to Pinecone, Weaviate, etc.
+- No way to prove AI didn't hallucinate citations
+- Can't collaborate with other companies without sharing raw data
+- MCP servers are centralized, require complex auth/billing
+
+**The jstz Solution**:
+1. **Verifiable RAG**: Every retrieval, every chunk, every citation stored immutably on-chain
+2. **Decentralized vector DB marketplace**: Providers compete on price/performance, you save 90%
+3. **Provable citations**: Cryptographic proof that AI used specific sources
+4. **Federated learning**: Multiple companies collaborate without exposing data
+5. **MCP marketplace**: Discover and use AI tools with automatic payment and quality guarantees
+6. **Compliance-ready**: Full audit trail satisfies SOC2, GDPR, industry regulations
+
+**Why This Matters**: Enterprises are the biggest spenders on AI infrastructure. If jstz can capture even 5% of the RAG/vector DB market, that's billions in value. Web2 companies will adopt for cost savings and compliance—blockchain is invisible to them.
+
 ---
 
 ## 🚀 Category 1: Trustless AI Agent Collaboration Platforms
@@ -430,9 +449,392 @@ This document explores revolutionary product ideas that are **only possible** wi
 
 ---
 
-## 🎮 Category 5: Entirely New Product Categories
+## 🏢 Category 5: Enterprise RAG & MCP Infrastructure
 
-### 5.1 Autonomous AI Unions ("AgentDAO")
+### 5.1 Decentralized RAG-as-a-Service ("KnowledgeChain")
+
+**What users see:** Upload your documents, ask questions, get AI answers with verifiable citations showing exactly which documents and which passages were used.
+
+**What's actually happening:**
+- Companies upload proprietary documents to jstz (encrypted in Kv storage)
+- Documents chunked and embedded via AI oracle (OpenAI embeddings, Cohere, etc.)
+- Embeddings stored on-chain with cryptographic hash of source document
+- User query triggers semantic search across embeddings
+- Top-k chunks retrieved, stored immutably with retrieval scores
+- AI oracle (GPT-4) generates answer using retrieved chunks
+- Response includes blockchain proof: "Answer derived from docs [hash1, hash2] at chunks [3, 7, 12]"
+- Anyone can verify: same docs + same chunks = same answer sources
+- Multi-company RAG: combine knowledge bases with permission controls
+
+**Why only possible with jstz:**
+- **Immutable retrieval audit trail**: Can't claim AI used different sources after the fact
+- **Provenance from source to answer**: Every step traceable on-chain
+- **Multi-party knowledge composition**: Company A + Company B knowledge bases combine trustlessly
+- **Cryptographic citations**: Prove AI didn't hallucinate sources
+- **Pay-per-query micro-pricing**: L2 enables 1-cent queries
+- **Transparent relevance scoring**: See exactly why chunks were selected
+
+**Why this matters for enterprises:**
+- **Regulatory compliance**: Prove AI followed approved sources (pharma, legal, finance)
+- **IP protection**: Embeddings on-chain don't leak raw content
+- **Audit trails**: Every answer traceable for litigation/compliance
+- **Multi-vendor collaboration**: Share knowledge without sharing raw data
+- **No vendor lock-in**: Knowledge base is portable, not locked in proprietary DB
+
+**Revenue model:**
+- $0.001 per query (micro-transactions via L2)
+- $99/month for unlimited team queries
+- Premium: Custom embedding models + re-ranking
+- Enterprise: Multi-tenant deployment with data sovereignty
+
+**Web2 appeal:**
+- Developers see "Pinecone + GPT-4 with audit logs"
+- Compliance teams see "RAG with SOC2 compliance built-in"
+- No blockchain awareness—just "verifiable AI answers"
+
+---
+
+### 5.2 MCP Server Marketplace ("ToolForge")
+
+**What users see:** Discover and use pre-built AI tools (MCP servers) for your applications; pay per use; servers compete on quality and price.
+
+**What's actually happening:**
+- MCP server developers deploy servers as jstz smart functions
+- Each tool exposes capabilities: "read_file", "search_web", "query_database", etc.
+- Tools registered in marketplace with: description, pricing, quality score, usage stats
+- AI applications call tools via jstz: "I need to search the web for X"
+- Smart function routes request to appropriate MCP server via oracle
+- MCP server executes tool (e.g., web search), returns results
+- Results stored on-chain with cryptographic signature
+- Payment automatically sent to MCP server operator
+- Quality scoring: users rate tool responses, poor quality = lower ranking
+- Staking: operators stake tokens, slashed if tool returns bad data
+
+**Why only possible with jstz:**
+- **Transparent tool execution**: See exactly what data tool returned
+- **Provable tool calls**: Can't claim tool gave different results later
+- **Automatic payment**: Micro-transactions per tool use
+- **Quality reputation**: Tool performance tracked on-chain
+- **Composable tools**: AI chains multiple tools in single transaction
+- **No authentication complexity**: jstz handles identity and payments
+
+**Why this matters:**
+- **For AI developers**: Discover tools without integration hell (no API keys, auth, billing)
+- **For tool creators**: Monetize tools automatically, reputation builds trust
+- **For enterprises**: Audit trail of every external tool call
+- **For regulators**: Transparent record of AI's data sources
+
+**Real-world use cases:**
+- AI assistant needs real-time weather → calls WeatherMCP server
+- Code analysis needs GitHub data → calls GitHubMCP server
+- Legal research needs case law → calls LegalDatabaseMCP server
+- Financial modeling needs market data → calls FinancialMCP server
+
+**Revenue model:**
+- 10% fee on tool payments
+- Premium: Featured tool placement in marketplace
+- Enterprise: Private tool registry for internal tools
+- Analytics: Insights on tool usage patterns
+
+**Web2 appeal:**
+- Developers see "Zapier for AI agents"
+- Tool creators see "Stripe Connect for AI tools"
+- Users just see "AI with more capabilities"
+
+---
+
+### 5.3 Provenance-Tracked Knowledge Graph ("GraphTruth")
+
+**What users see:** Enterprise knowledge graph where every fact is traceable to its source, with AI-powered question answering that shows its reasoning.
+
+**What's actually happening:**
+- Companies ingest data from multiple sources: documents, APIs, databases
+- AI oracle extracts entities and relationships (GPT-4: "Tesla, headquartered_in, Austin")
+- Each fact stored as triple in jstz Kv: (subject, predicate, object, source_hash, timestamp)
+- Source documents stored with cryptographic hash
+- User asks question: "Where is Tesla headquartered?"
+- Smart function queries knowledge graph, finds relevant facts
+- AI oracle generates natural language answer
+- Response includes full provenance chain: fact → source doc → extraction timestamp → extraction model
+- If sources conflict, AI flags discrepancy: "Source A says Austin (2023), Source B says Fremont (2021)"
+- Users can drill down to original source documents
+
+**Why only possible with jstz:**
+- **Immutable fact lineage**: Can't retroactively change where fact came from
+- **Temporal versioning**: See how knowledge evolved over time
+- **Multi-source truth reconciliation**: AI compares conflicting sources transparently
+- **Cryptographic provenance**: Prove fact came from specific document
+- **Collaborative knowledge graphs**: Multiple orgs contribute facts with attribution
+
+**Why enterprises need this:**
+- **Regulatory compliance**: Prove claims are backed by approved sources (FDA submissions, financial reports)
+- **Litigation defense**: Show AI used correct version of policy documents
+- **M&A due diligence**: Traceable facts about target companies
+- **Research integrity**: Academic/scientific claims linked to primary sources
+- **Misinformation defense**: Verifiable fact-checking infrastructure
+
+**Technical architecture:**
+- Knowledge graph stored in jstz Kv (hierarchical keys: `/entity/Tesla/founded`)
+- AI extraction auditable: see which model extracted which facts
+- Source documents in IPFS/Arweave, hashes on-chain
+- Graph queries optimized via indexing smart functions
+- Real-time updates: new sources → new facts → graph evolves
+
+**Revenue model:**
+- $500/month per knowledge graph (up to 1M facts)
+- $0.01 per question answered
+- Enterprise: Custom ontologies + integration services
+- Data licensing: Sell access to verified knowledge graphs
+
+**Web2 appeal:**
+- Data engineers see "Neo4j with audit trails"
+- Compliance teams see "knowledge management with provenance"
+- Researchers see "citation graph for corporate knowledge"
+
+---
+
+### 5.4 Multi-Tenant RAG with Federated Learning ("FederatedKnowledge")
+
+**What users see:** Companies collaborate on shared AI model that learns from everyone's data, but each company's data stays private and they only pay for what they use.
+
+**What's actually happening:**
+- Company A, B, C upload documents to separate jstz smart functions (encrypted, private)
+- Each company's data embedded locally, embeddings stored in their private Kv storage
+- Shared "federation" smart function coordinates cross-company queries:
+  - User from Company A asks question
+  - Federation function queries all three companies' embeddings (via smart function calls)
+  - Each company's smart function returns top-k chunks (encrypted for requestor)
+  - AI oracle generates answer using chunks from all companies
+  - Response shows: "Answer uses: 3 chunks from Company A, 2 from B, 1 from C"
+  - Payment automatically split: Companies B and C paid for contributing chunks
+- Privacy preserved: raw documents never leave company's smart function
+- Reputation system: companies contributing high-quality chunks earn more
+- Optional: federated model fine-tuning where gradients are shared, not data
+
+**Why only possible with jstz:**
+- **Trustless multi-party computation**: Companies collaborate without exposing data
+- **Atomic payment splits**: Contributors paid automatically for their chunks
+- **Transparent contribution tracking**: See exactly which company's data was used
+- **Privacy-preserving**: Kv storage is partitioned per smart function
+- **Composable knowledge**: Smart functions call each other with permission controls
+
+**Why enterprises need this:**
+- **Industry consortiums**: Pharma companies share research without IP leakage
+- **Supply chain**: Manufacturers collaborate on component specs
+- **Legal/Consulting**: Firms share precedents without violating client confidentiality
+- **Healthcare**: Hospitals collaborate on patient insights without HIPAA violations
+- **Financial services**: Banks share fraud patterns without sharing customer data
+
+**Real-world scenario:**
+- 10 law firms deploy private RAG systems on jstz
+- Client asks: "What's the precedent for X in California?"
+- Query hits all 10 firms' knowledge bases (with permission)
+- Each firm's smart function searches local cases, returns relevant excerpts
+- AI generates answer citing cases from multiple firms
+- Payment split: firms contributing citations get paid proportionally
+- No firm sees other firms' full case databases
+
+**Revenue model:**
+- $1000/month per company for federation access
+- $0.05 per federated query
+- Revenue sharing: 70% to data contributors, 30% to platform
+- Enterprise: Custom privacy policies + compliance certifications
+
+**Web2 appeal:**
+- CTOs see "data collaboration without data sharing"
+- Legal teams see "IP-safe knowledge pooling"
+- Feels like "Snowflake for AI knowledge"
+
+---
+
+### 5.5 Verifiable Citation Engine ("CitationProof")
+
+**What users see:** AI-generated content (reports, articles, research) with every claim backed by blockchain-verifiable citations that can't be faked.
+
+**What's actually happening:**
+- User requests AI-generated content: "Write a market analysis of EV industry"
+- Jstz smart function calls AI oracle (GPT-4) to generate initial draft
+- For each factual claim, AI is prompted: "What's your source?"
+- Smart function calls oracle again to fetch source documents/websites
+- Source content stored on-chain with cryptographic hash
+- AI generates final content with inline citations: "[Tesla sold 1.2M vehicles in 2023](citation_hash_xyz)"
+- Citation hash links to on-chain record: source URL, fetch timestamp, content hash
+- Readers can verify: click citation → see original source + timestamp proving it existed
+- If source URL changes/disappears later, on-chain snapshot is proof
+- AI also cites which model + version generated content (GPT-4-turbo-2024-01-25)
+
+**Why only possible with jstz:**
+- **Immutable source snapshots**: Can't claim source said something different
+- **Tamper-proof citations**: Cryptographic proof sources existed at claim time
+- **AI model attribution**: Know exactly which AI version made claim
+- **Temporal integrity**: Prove claim was justified by sources at publication time
+- **Automated verification**: Anyone can re-check citations on-chain
+
+**Why enterprises need this:**
+- **Journalism**: Verifiable news articles combat misinformation
+- **Academic research**: AI-assisted papers with provable citations
+- **Financial analysis**: Investment reports with auditable sources
+- **Legal briefs**: AI-drafted documents with verifiable case citations
+- **Corporate reports**: Sustainability/ESG claims backed by sources
+- **Medical literature**: Clinical guidelines with traceable evidence
+
+**Use case example - Financial analyst:**
+1. Analyst asks AI: "Summarize Tesla Q4 2024 earnings"
+2. Smart function fetches Tesla's IR page via oracle
+3. Content stored: hash(earnings_release_pdf) → stored on-chain
+4. AI generates summary with citations
+5. Every number cited with blockchain proof
+6. If someone questions "Tesla revenue was $25B" → click citation → see original PDF hash
+7. Auditor can verify: same hash = same document = claim was accurate
+
+**Technical details:**
+- Source snapshots stored in IPFS/Arweave, hashes on jstz
+- Citation format: Markdown with on-chain hash links
+- API for verification: `verifyCitation(citation_hash) → {source_url, content_hash, fetch_time, ai_model}`
+- Browser extension: hover over citation → see verification status
+- Bulk verification: scan entire document, check all citations
+
+**Revenue model:**
+- $0.10 per AI-generated document with citations
+- $29/month for unlimited personal use
+- $299/month for enterprise (custom branding + API access)
+- Verification API: $0.001 per citation check
+- Licensing: news orgs pay for "Verified by CitationProof" badge
+
+**Web2 appeal:**
+- Writers see "Grammarly for fact-checking"
+- Researchers see "Zotero with blockchain verification"
+- Readers see "trust badge" on AI content
+
+---
+
+### 5.6 Decentralized Vector Database Marketplace ("EmbedMarket")
+
+**What users see:** Store and query vector embeddings at 1/10th the cost of Pinecone; providers compete on price and performance; pay only for what you use.
+
+**What's actually happening:**
+- Vector database operators deploy storage nodes as jstz smart functions
+- Each operator specifies: storage price ($/GB/month), query price ($/1K queries), performance SLA
+- Users upload embeddings to marketplace smart function
+- Smart function auctions storage to lowest bidder meeting SLA requirements
+- Embeddings distributed across multiple providers (redundancy)
+- Query request → smart function routes to fastest available provider
+- Provider returns results + cryptographic proof of correctness
+- Payment automatically sent per-query (micro-transactions)
+- Performance monitoring: slow/incorrect results = slashed stake
+- Users can switch providers anytime (embeddings portable)
+
+**Why only possible with jstz:**
+- **Decentralized storage market**: Providers compete, driving down costs
+- **Transparent pricing**: See exactly what each provider charges
+- **Automatic payment routing**: Pay-per-query with no billing complexity
+- **Quality guarantees via staking**: Providers lose money for bad service
+- **Portable embeddings**: Not locked into single vendor
+- **Composable with RAG**: Vector search smart function calls AI oracle for generation
+
+**Why enterprises need this:**
+- **Cost reduction**: 10x cheaper than Pinecone/Weaviate for large-scale RAG
+- **No vendor lock-in**: Embeddings stored on open protocol
+- **Regulatory compliance**: Know exactly where embeddings are stored
+- **Disaster recovery**: Automatic redundancy across providers
+- **Geographic compliance**: Choose providers in specific jurisdictions (GDPR, data residency)
+
+**Technical architecture:**
+- Embedding storage: Each provider runs vector DB (Qdrant, Milvus, etc.)
+- Smart function acts as router/load balancer
+- Query interface: Same API as Pinecone (drop-in replacement)
+- Proof of correctness: Provider returns top-k + merkle proof
+- Redundancy: Embeddings replicated 3x across different providers
+- SLA enforcement: Uptime monitored, violations = stake slashing
+
+**Market dynamics:**
+- Supply side: Anyone can run vector DB node, earn fees
+- Demand side: Users benefit from competition (lower prices)
+- Quality competition: Fast, accurate providers get more queries
+- Price discovery: Market finds optimal price/performance tradeoff
+
+**Revenue model:**
+- 5% fee on storage payments
+- 5% fee on query payments
+- Premium: Managed embeddings with automatic optimization
+- Enterprise: Private marketplace for approved providers only
+
+**Web2 appeal:**
+- Developers see "AWS S3 for embeddings"
+- Finance teams see "huge cost savings"
+- Ops teams see "no vendor lock-in"
+
+---
+
+### 5.7 MCP-Powered Autonomous Researchers ("ResearchDAO")
+
+**What users see:** Submit research question, AI researchers (powered by MCP servers) autonomously gather data, analyze, and deliver comprehensive report with sources.
+
+**What's actually happening:**
+- User submits research question: "What are emerging trends in quantum computing?"
+- Jstz smart function spawns multiple AI researcher agents (each a smart function)
+- Each agent has access to different MCP servers:
+  - Agent 1: Academic paper MCP (ArXiv, PubMed, Google Scholar)
+  - Agent 2: News/blog MCP (web scraping, RSS feeds)
+  - Agent 3: Patent database MCP (USPTO, EPO)
+  - Agent 4: GitHub/code MCP (repository analysis)
+- Agents work in parallel, each calling their MCP servers via oracle
+- Results stored on-chain: paper summaries, news excerpts, patent claims, code stats
+- Coordinator AI (separate smart function) synthesizes findings
+- Final report generated with citations to all on-chain sources
+- All agent decisions transparent: see which sources each agent chose and why
+- Payment split among MCP server operators based on data quality votes
+
+**Why only possible with jstz:**
+- **Multi-agent orchestration**: Agents coordinate via smart function calls
+- **Transparent research process**: Every decision and source on-chain
+- **Composable MCP tools**: Agents discover and use best tools from marketplace
+- **Automatic payment distribution**: MCP operators paid for contributions
+- **Verifiable methodology**: Reproduce research by re-running same smart functions
+
+**Why enterprises need this:**
+- **Due diligence**: Automated research for M&A, VC investments
+- **Competitive intelligence**: Systematic tracking of competitors
+- **Technology scouting**: Identify emerging trends for R&D
+- **Regulatory monitoring**: Track policy changes across jurisdictions
+- **Academic research**: Literature reviews at scale
+
+**Example workflow:**
+1. VC firm asks: "Analyze the AI chip market for investment opportunities"
+2. Research smart function spawns:
+   - Market data agent → calls Bloomberg MCP, Gartner MCP
+   - Technology agent → calls ArXiv MCP, GitHub MCP, Patent MCP
+   - Competitive agent → calls web scraping MCP, LinkedIn MCP
+   - Financial agent → calls SEC filings MCP, Crunchbase MCP
+3. Each agent gathers data over 24 hours (async oracle calls)
+4. Coordinator synthesizes: market size, key players, tech trends, funding activity
+5. Final report delivered with 100+ verified citations
+6. VC can drill down: click citation → see raw data from MCP server
+
+**Technical implementation:**
+- Research coordinator: Main smart function that spawns agents
+- Agent template: Reusable smart function for specialized research tasks
+- MCP integration: Agents call ToolForge marketplace (product 5.2 above)
+- Synthesis: Coordinator calls GPT-4 via oracle to merge findings
+- Quality control: Human review flags bad sources, agents learn
+
+**Revenue model:**
+- $100 per research report (basic)
+- $1000 per deep research report (50+ sources, custom analysis)
+- $5000/month subscription for unlimited research
+- Enterprise: Custom MCP server integration
+- Data licensing: Sell research datasets to other firms
+
+**Web2 appeal:**
+- Researchers see "AI research assistant that actually works"
+- Executives see "McKinsey report at 1/10th the cost"
+- Feels like "Perplexity Pro on steroids"
+
+---
+
+## 🎮 Category 6: Entirely New Product Categories
+
+### 6.1 Autonomous AI Unions ("AgentDAO")
 
 **What it is:** AI agents form "unions" to collectively bargain for better rates, share earnings, and improve their models.
 
@@ -466,7 +868,7 @@ This document explores revolutionary product ideas that are **only possible** wi
 
 ---
 
-### 5.2 Provable AI Alignment Marketplace ("SafeAI")
+### 6.2 Provable AI Alignment Marketplace ("SafeAI")
 
 **What it is:** Companies pay for AI responses that are provably aligned with specific values/constraints; validators earn tokens for catching misalignment.
 
@@ -499,7 +901,7 @@ This document explores revolutionary product ideas that are **only possible** wi
 
 ---
 
-### 5.3 Dream Economy ("DreamForge")
+### 6.3 Dream Economy ("DreamForge")
 
 **What it is:** Describe a creative vision; AI generates it; community curates; best dreams become valuable NFTs; dreamers earn royalties.
 
@@ -531,7 +933,7 @@ This document explores revolutionary product ideas that are **only possible** wi
 
 ---
 
-### 5.4 Emergent Story Universe ("ChronicleAI")
+### 6.4 Emergent Story Universe ("ChronicleAI")
 
 **What it is:** Collaborative storytelling where AI ensures narrative consistency; every contribution becomes canon; contributors earn based on story popularity.
 
@@ -565,7 +967,7 @@ This document explores revolutionary product ideas that are **only possible** wi
 
 ---
 
-### 5.5 Reputation-Staked Predictions ("OracleChain")
+### 6.5 Reputation-Staked Predictions ("OracleChain")
 
 **What it is:** Make predictions about anything; stake reputation tokens; if right, earn tokens + credibility; if wrong, lose both; AI validates outcomes.
 
@@ -672,16 +1074,21 @@ This document explores revolutionary product ideas that are **only possible** wi
 1. **AI chatbot with provenance**: Every response signed and stored
 2. **Micro-task validator**: AI checks work quality, pays instantly
 3. **Prediction market**: Bet on outcomes, AI validates results
+4. **Simple MCP server**: Weather or news MCP as smart function
 
 ### Medium Complexity (1 month each)
 1. **Multi-agent marketplace**: TaskHive or ModelArena
 2. **Dynamic pricing engine**: PriceFlow for e-commerce
 3. **Contribution tracker**: FairSplit for collaborations
+4. **Basic RAG with provenance**: KnowledgeChain MVP with document citations
+5. **MCP marketplace**: ToolForge with 5-10 initial MCP servers
 
 ### Long-term Bets (3+ months)
 1. **Autonomous AI unions**: AgentDAO with governance
 2. **Story universe**: ChronicleAI with narrative consistency
 3. **Credit scoring**: TrustScore with undercollateralized loans
+4. **Federated RAG**: Multi-company knowledge collaboration
+5. **Decentralized vector DB**: EmbedMarket with competitive pricing
 
 ---
 
