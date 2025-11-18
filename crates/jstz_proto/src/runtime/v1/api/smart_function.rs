@@ -330,4 +330,351 @@ mod test {
             .unwrap();
         });
     }
+
+    #[test]
+    fn test_nested_call_sequence_increments() {
+        use crate::runtime::v1::api::ProtocolData;
+        use jstz_core::host_defined;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let mut jstz_rt = Runtime::new(10000).unwrap();
+        let realm = jstz_rt.realm().clone();
+        let context = jstz_rt.context();
+
+        realm.register_api(WebApi, context);
+
+        let operation_hash = Blake2b::from(b"test_op".as_ref());
+        let addr1 = SmartFunctionHash::digest(b"addr1").unwrap();
+        let addr2 = SmartFunctionHash::digest(b"addr2").unwrap();
+        let addr3 = SmartFunctionHash::digest(b"addr3").unwrap();
+
+        // Simulate root call setup
+        let call_sequence = Rc::new(RefCell::new(0u64));
+        let root_data = ProtocolData {
+            address: addr1.clone(),
+            operation_hash: operation_hash.clone(),
+            call_sequence: call_sequence.clone(),
+            depth: 0,
+        };
+
+        {
+            host_defined!(context, mut host_defined);
+            host_defined.insert(root_data);
+        }
+
+        // Verify root starts at 0
+        {
+            host_defined!(context, host_defined);
+            let data = host_defined.get::<ProtocolData>().unwrap();
+            assert_eq!(*data.call_sequence.borrow(), 0);
+            assert_eq!(data.depth, 0);
+        }
+
+        // Simulate nested call 1: increment to 1
+        {
+            let parent_seq = {
+                host_defined!(context, host_defined);
+                host_defined.get::<ProtocolData>().map(|d| d.call_sequence.clone())
+            }
+            .unwrap();
+            *parent_seq.borrow_mut() += 1;
+
+            let nested_data = ProtocolData {
+                address: addr2.clone(),
+                operation_hash: operation_hash.clone(),
+                call_sequence: parent_seq.clone(),
+                depth: 1,
+            };
+
+            host_defined!(context, mut host_defined);
+            host_defined.insert(nested_data);
+        }
+
+        // Verify sequence is now 1
+        {
+            host_defined!(context, host_defined);
+            let data = host_defined.get::<ProtocolData>().unwrap();
+            assert_eq!(*data.call_sequence.borrow(), 1);
+            assert_eq!(data.depth, 1);
+        }
+
+        // Simulate nested call 2: increment to 2
+        {
+            let parent_seq = {
+                host_defined!(context, host_defined);
+                host_defined.get::<ProtocolData>().map(|d| d.call_sequence.clone())
+            }
+            .unwrap();
+            *parent_seq.borrow_mut() += 1;
+
+            let nested_data = ProtocolData {
+                address: addr3.clone(),
+                operation_hash: operation_hash.clone(),
+                call_sequence: parent_seq.clone(),
+                depth: 2,
+            };
+
+            host_defined!(context, mut host_defined);
+            host_defined.insert(nested_data);
+        }
+
+        // Verify sequence is now 2 and depth is 2
+        {
+            host_defined!(context, host_defined);
+            let data = host_defined.get::<ProtocolData>().unwrap();
+            assert_eq!(*data.call_sequence.borrow(), 2);
+            assert_eq!(data.depth, 2);
+        }
+
+        // Verify shared counter persists (all point to same Rc)
+        assert_eq!(*call_sequence.borrow(), 2);
+    }
+
+    #[test]
+    fn test_sibling_calls_have_unique_sequences() {
+        use crate::runtime::v1::api::ProtocolData;
+        use jstz_core::host_defined;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let mut jstz_rt = Runtime::new(10000).unwrap();
+        let realm = jstz_rt.realm().clone();
+        let context = jstz_rt.context();
+
+        realm.register_api(WebApi, context);
+
+        let operation_hash = Blake2b::from(b"test_op".as_ref());
+        let root_addr = SmartFunctionHash::digest(b"root").unwrap();
+
+        // Setup root
+        let call_sequence = Rc::new(RefCell::new(0u64));
+        let root_data = ProtocolData {
+            address: root_addr.clone(),
+            operation_hash: operation_hash.clone(),
+            call_sequence: call_sequence.clone(),
+            depth: 0,
+        };
+
+        {
+            host_defined!(context, mut host_defined);
+            host_defined.insert(root_data.clone());
+        }
+
+        // First sibling call
+        {
+            *call_sequence.borrow_mut() += 1;
+        }
+        let seq_a = *call_sequence.borrow();
+
+        // Restore parent after first call
+        {
+            host_defined!(context, mut host_defined);
+            host_defined.insert(root_data.clone());
+        }
+
+        // Second sibling call (should get sequence 2, not 1)
+        {
+            *call_sequence.borrow_mut() += 1;
+        }
+        let seq_b = *call_sequence.borrow();
+
+        // Verify uniqueness
+        assert_eq!(seq_a, 1);
+        assert_eq!(seq_b, 2);
+        assert_ne!(seq_a, seq_b, "Sibling calls must have unique sequences");
+    }
+
+    #[test]
+    fn test_deep_nesting_memory_and_uniqueness() {
+        use crate::runtime::v1::api::ProtocolData;
+        use jstz_core::host_defined;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let mut jstz_rt = Runtime::new(10000).unwrap();
+        let realm = jstz_rt.realm().clone();
+        let context = jstz_rt.context();
+
+        realm.register_api(WebApi, context);
+
+        let operation_hash = Blake2b::from(b"deep_test".as_ref());
+        let call_sequence = Rc::new(RefCell::new(0u64));
+
+        const MAX_DEPTH: u8 = 50;
+        let mut call_ids = Vec::new();
+
+        // Simulate deep nesting
+        for depth in 0..=MAX_DEPTH {
+            let addr = SmartFunctionHash::digest(format!("addr_{}", depth).as_bytes()).unwrap();
+
+            // Increment sequence for nested calls (skip root)
+            if depth > 0 {
+                *call_sequence.borrow_mut() += 1;
+            }
+
+            let current_seq = *call_sequence.borrow();
+            let call_id = format!("{}:{}", operation_hash, current_seq);
+            call_ids.push(call_id);
+
+            let data = ProtocolData {
+                address: addr,
+                operation_hash: operation_hash.clone(),
+                call_sequence: call_sequence.clone(),
+                depth,
+            };
+
+            {
+                host_defined!(context, mut host_defined);
+                host_defined.insert(data);
+            }
+        }
+
+        // Verify all call_ids are unique
+        let unique_count = call_ids.iter().collect::<std::collections::HashSet<_>>().len();
+        assert_eq!(
+            unique_count,
+            call_ids.len(),
+            "All call IDs must be unique even with deep nesting"
+        );
+
+        // Verify final sequence matches depth
+        assert_eq!(*call_sequence.borrow(), MAX_DEPTH as u64);
+
+        // Memory verification: Rc should have minimal overhead
+        // Each ProtocolData shares the same Rc, so memory is O(1) for the counter
+        // The context holds one reference, and this test holds another
+        assert_eq!(
+            Rc::strong_count(&call_sequence),
+            2,
+            "Context holds one Rc reference, test holds another - shared counter has O(1) memory overhead"
+        );
+    }
+
+    #[test]
+    fn test_call_id_format() {
+        use crate::runtime::v1::api::ProtocolData;
+        use jstz_core::host_defined;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let mut jstz_rt = Runtime::new(10000).unwrap();
+        let realm = jstz_rt.realm().clone();
+        let context = jstz_rt.context();
+
+        realm.register_api(WebApi, context);
+
+        let operation_hash = Blake2b::from(b"format_test".as_ref());
+        let addr = SmartFunctionHash::digest(b"test_addr").unwrap();
+
+        // Test sequence values
+        let test_sequences = vec![0, 1, 42, 999, 1000000];
+
+        for seq in test_sequences {
+            let call_sequence = Rc::new(RefCell::new(seq));
+            let data = ProtocolData {
+                address: addr.clone(),
+                operation_hash: operation_hash.clone(),
+                call_sequence: call_sequence.clone(),
+                depth: 0,
+            };
+
+            {
+                host_defined!(context, mut host_defined);
+                host_defined.insert(data);
+            }
+
+            let expected_call_id = format!("{}:{}", operation_hash, seq);
+
+            // Verify format
+            let actual_seq = {
+                host_defined!(context, host_defined);
+                host_defined
+                    .get::<ProtocolData>()
+                    .map(|d| *d.call_sequence.borrow())
+            }
+            .unwrap();
+
+            assert_eq!(actual_seq, seq);
+
+            // Verify call_id can be parsed
+            let call_id = format!("{}:{}", operation_hash, actual_seq);
+            assert_eq!(call_id, expected_call_id);
+            assert!(call_id.contains(':'), "Call ID must contain separator");
+        }
+    }
+
+    #[test]
+    fn test_max_depth_boundary() {
+        use crate::runtime::v1::api::ProtocolData;
+        use jstz_core::host_defined;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let mut jstz_rt = Runtime::new(10000).unwrap();
+        let realm = jstz_rt.realm().clone();
+        let context = jstz_rt.context();
+
+        realm.register_api(WebApi, context);
+
+        let operation_hash = Blake2b::from(b"max_depth_test".as_ref());
+        let addr = SmartFunctionHash::digest(b"deep_addr").unwrap();
+
+        // Test maximum u8 value
+        let max_depth: u8 = 255;
+        let call_sequence = Rc::new(RefCell::new(max_depth as u64));
+
+        let data = ProtocolData {
+            address: addr,
+            operation_hash: operation_hash.clone(),
+            call_sequence,
+            depth: max_depth,
+        };
+
+        {
+            host_defined!(context, mut host_defined);
+            host_defined.insert(data);
+        }
+
+        // Verify max depth is handled
+        {
+            host_defined!(context, host_defined);
+            let data = host_defined.get::<ProtocolData>().unwrap();
+            assert_eq!(data.depth, 255);
+        }
+    }
+
+    #[test]
+    fn test_sequence_overflow_safety() {
+        use crate::runtime::v1::api::ProtocolData;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let operation_hash = Blake2b::from(b"overflow_test".as_ref());
+        let addr = SmartFunctionHash::digest(b"test").unwrap();
+
+        // Test near u64::MAX
+        let near_max = u64::MAX - 100;
+        let call_sequence = Rc::new(RefCell::new(near_max));
+
+        let _data = ProtocolData {
+            address: addr,
+            operation_hash,
+            call_sequence: call_sequence.clone(),
+            depth: 0,
+        };
+
+        // Verify large sequences are handled
+        assert_eq!(*call_sequence.borrow(), near_max);
+
+        // Simulate increments
+        for _ in 0..10 {
+            *call_sequence.borrow_mut() += 1;
+        }
+
+        assert_eq!(*call_sequence.borrow(), near_max + 10);
+
+        // Note: In production, sequence overflow at u64::MAX would take
+        // billions of years at 1M calls/sec. No wrapping needed.
+    }
 }

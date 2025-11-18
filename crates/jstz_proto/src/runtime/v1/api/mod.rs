@@ -16,7 +16,7 @@ use crate::{operation::OperationHash, runtime::v1::api};
 
 pub use kv::{Kv, KvValue};
 
-#[derive(Finalize, JsData)]
+#[derive(Clone, Finalize, JsData)]
 pub struct ProtocolData {
     pub address: SmartFunctionHash,
     pub operation_hash: OperationHash,
