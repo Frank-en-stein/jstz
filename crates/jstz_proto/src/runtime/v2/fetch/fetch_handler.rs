@@ -2675,15 +2675,14 @@ mod test {
                 export default async (req) => {
                     const childAddr = new URL(req.url).pathname.substring(1);
 
-                    // First call will FAIL (child returns 500)
-                    try {
-                        await fetch(`jstz://${childAddr}/fail`);
-                    } catch (e) {
-                        // Swallow error
-                    }
+                    // First call will FAIL (child returns 500 status, triggers rollback)
+                    // Note: fetch() returns Response, doesn't throw on error status
+                    const resp1 = await fetch(`jstz://${childAddr}/fail`);
+                    // resp1.status === 500, state is rolled back
 
-                    // Second call will SUCCEED (child returns 200)
-                    await fetch(`jstz://${childAddr}/success`);
+                    // Second call will SUCCEED (child returns 200 status)
+                    const resp2 = await fetch(`jstz://${childAddr}/success`);
+                    // resp2.status === 200, state is committed
 
                     return new Response("parent done");
                 }
@@ -2808,6 +2807,117 @@ mod test {
             // The actual overflow protection is verified by code inspection:
             // load_and_run() has: parent_depth.checked_add(1).ok_or_else(...)
             // This test confirms the code path is exercised
+        })
+    }
+
+    #[test]
+    fn test_v2_concurrent_parallel_calls() {
+        TOKIO.block_on(async {
+            // Verify that parallel calls (Promise.all) get unique sequences
+            // This tests for potential race conditions in sequence counter
+
+            let parent_script = r#"
+                export default async (req) => {
+                    const childAddr = new URL(req.url).pathname.substring(1);
+
+                    // Make THREE parallel calls using Promise.all
+                    const results = await Promise.all([
+                        fetch(`jstz://${childAddr}/call1`),
+                        fetch(`jstz://${childAddr}/call2`),
+                        fetch(`jstz://${childAddr}/call3`)
+                    ]);
+
+                    // All calls should have completed
+                    return new Response(`completed ${results.length} calls`);
+                }
+            "#;
+
+            let child_script = r#"
+                export default async (req) => {
+                    const path = new URL(req.url).pathname;
+                    return new Response(`received: ${path}`);
+                }
+            "#;
+
+            let debug_sink = DebugLogSink::new();
+            let mut host = tezos_smart_rollup_mock::MockHost::default();
+            host.set_debug_handler(debug_sink.clone());
+
+            let (mut host, tx, source_address, hashes) = setup(&mut host, [parent_script, child_script]);
+            let parent_addr = hashes[0].clone();
+            let child_addr = hashes[1].clone();
+
+            let op_hash = Blake2b::from(b"test_v2_parallel".as_ref());
+
+            let _response = process_and_dispatch_request(
+                JsHostRuntime::new(&mut host),
+                tx,
+                false,
+                Some(op_hash.clone()),
+                source_address.clone().into(),
+                source_address.into(),
+                "GET".into(),
+                Url::parse(format!("jstz://{}/{}", parent_addr, child_addr).as_str()).unwrap(),
+                vec![],
+                None,
+                Limiter::default(),
+                None,
+                0,
+            )
+            .await;
+
+            let log_content = debug_sink.str_content();
+            let op_hash_str = op_hash.to_string();
+
+            // All three parallel calls should get unique sequences
+            let has_seq_1 = log_content.contains(&format!("{}:1", op_hash_str));
+            let has_seq_2 = log_content.contains(&format!("{}:2", op_hash_str));
+            let has_seq_3 = log_content.contains(&format!("{}:3", op_hash_str));
+
+            assert!(
+                has_seq_1,
+                "First parallel call should have sequence 1"
+            );
+
+            assert!(
+                has_seq_2,
+                "Second parallel call should have sequence 2"
+            );
+
+            assert!(
+                has_seq_3,
+                "Third parallel call should have sequence 3"
+            );
+
+            // Verify NO duplicate sequences
+            // Count occurrences of each sequence in logs
+            let seq_1_count = log_content.matches(&format!("{}:1", op_hash_str)).count();
+            let seq_2_count = log_content.matches(&format!("{}:2", op_hash_str)).count();
+            let seq_3_count = log_content.matches(&format!("{}:3", op_hash_str)).count();
+
+            // Each sequence should appear exactly twice (Start + End events)
+            assert_eq!(
+                seq_1_count, 2,
+                "Sequence 1 should appear exactly twice (Start + End), found {}",
+                seq_1_count
+            );
+
+            assert_eq!(
+                seq_2_count, 2,
+                "Sequence 2 should appear exactly twice (Start + End), found {}",
+                seq_2_count
+            );
+
+            assert_eq!(
+                seq_3_count, 2,
+                "Sequence 3 should appear exactly twice (Start + End), found {}",
+                seq_3_count
+            );
+
+            // This verifies:
+            // 1. Parallel calls get unique sequences (no race condition)
+            // 2. RefCell borrowing works correctly in async context
+            // 3. No sequence number reuse
         })
     }
 }
