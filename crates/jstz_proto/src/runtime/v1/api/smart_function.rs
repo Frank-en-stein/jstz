@@ -2,7 +2,7 @@ use boa_engine::{
     js_string,
     object::{builtins::JsPromise, ErasedObject, ObjectInitializer},
     property::Attribute,
-    Context, JsArgs, JsData, JsNativeError, JsResult, JsValue, NativeFunction,
+    Context, JsArgs, JsData, JsError, JsNativeError, JsResult, JsValue, NativeFunction,
 };
 
 use jstz_api::http::request::Request;
@@ -118,12 +118,22 @@ impl SmartFunctionApi {
             *seq += 1;
         }
 
+        // Check depth limit to prevent overflow (u8::MAX = 255)
+        let child_depth = parent_depth
+            .checked_add(1)
+            .ok_or_else(|| {
+                JsError::from_native(
+                    JsNativeError::eval()
+                        .with_message("Maximum call depth exceeded (255 levels)")
+                )
+            })?;
+
         // Create new ProtocolData for the nested call with incremented depth
         let child_data = ProtocolData {
             address: address.clone(),
             operation_hash: parent_operation_hash.clone(),
             call_sequence: parent_call_sequence.clone(), // Share counter
-            depth: parent_depth + 1,                      // Increment depth
+            depth: child_depth,                           // Safe incremented depth
         };
 
         // Replace parent data with child data in context
@@ -676,5 +686,78 @@ mod test {
 
         // Note: In production, sequence overflow at u64::MAX would take
         // billions of years at 1M calls/sec. No wrapping needed.
+    }
+
+    #[test]
+    fn test_depth_overflow_prevented() {
+        use crate::runtime::v1::api::ProtocolData;
+        use jstz_core::host_defined;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let mut jstz_rt = Runtime::new(100000).unwrap();
+        let realm = jstz_rt.realm().clone();
+        let context = jstz_rt.context();
+
+        realm.register_api(WebApi, context);
+
+        let operation_hash = Blake2b::from(b"depth_overflow_test".as_ref());
+        let addr = SmartFunctionHash::digest(b"test_addr").unwrap();
+
+        // Setup ProtocolData at max depth (254)
+        let call_sequence = Rc::new(RefCell::new(0u64));
+        let data_at_254 = ProtocolData {
+            address: addr.clone(),
+            operation_hash: operation_hash.clone(),
+            call_sequence: call_sequence.clone(),
+            depth: 254,
+        };
+
+        {
+            host_defined!(context, mut host_defined);
+            host_defined.insert(data_at_254);
+        }
+
+        // Attempt to nest one more level (254 → 255 should succeed)
+        let result_255 = {
+            let parent_depth = {
+                host_defined!(context, host_defined);
+                host_defined.get::<ProtocolData>().map(|d| d.depth)
+            }
+            .unwrap();
+
+            parent_depth.checked_add(1)
+        };
+
+        assert_eq!(result_255, Some(255), "Depth 254 → 255 should succeed");
+
+        // Setup at depth 255 (u8::MAX)
+        let data_at_255 = ProtocolData {
+            address: addr.clone(),
+            operation_hash: operation_hash.clone(),
+            call_sequence: call_sequence.clone(),
+            depth: 255,
+        };
+
+        {
+            host_defined!(context, mut host_defined);
+            host_defined.insert(data_at_255);
+        }
+
+        // Attempt to nest one more level (255 → 256 should fail with None)
+        let result_overflow = {
+            let parent_depth = {
+                host_defined!(context, host_defined);
+                host_defined.get::<ProtocolData>().map(|d| d.depth)
+            }
+            .unwrap();
+
+            parent_depth.checked_add(1)
+        };
+
+        assert_eq!(
+            result_overflow, None,
+            "Depth 255 → 256 should overflow and return None (caught by checked_add)"
+        );
     }
 }
