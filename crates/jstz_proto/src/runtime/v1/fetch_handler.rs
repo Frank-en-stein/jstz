@@ -204,7 +204,7 @@ pub fn fetch(
                                 // Root call: create new ProtocolData
                                 (
                                     Rc::new(RefCell::new(0u64)),
-                                    0u8,
+                                    0u16,
                                     format!("{}:0", operation_hash),
                                 )
                             }

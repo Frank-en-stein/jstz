@@ -118,13 +118,13 @@ impl SmartFunctionApi {
             *seq += 1;
         }
 
-        // Check depth limit to prevent overflow (u8::MAX = 255)
+        // Check depth limit to prevent overflow (u16::MAX = 65,535)
         let child_depth = parent_depth
             .checked_add(1)
             .ok_or_else(|| {
                 JsError::from_native(
                     JsNativeError::eval()
-                        .with_message("Maximum call depth exceeded (255 levels)")
+                        .with_message("Maximum call depth exceeded (65,535 levels)")
                 )
             })?;
 
@@ -511,7 +511,7 @@ mod test {
         let operation_hash = Blake2b::from(b"deep_test".as_ref());
         let call_sequence = Rc::new(RefCell::new(0u64));
 
-        const MAX_DEPTH: u8 = 50;
+        const MAX_DEPTH: u16 = 50;
         let mut call_ids = Vec::new();
 
         // Simulate deep nesting
@@ -630,8 +630,8 @@ mod test {
         let operation_hash = Blake2b::from(b"max_depth_test".as_ref());
         let addr = SmartFunctionHash::digest(b"deep_addr").unwrap();
 
-        // Test maximum u8 value
-        let max_depth: u8 = 255;
+        // Test maximum u16 value
+        let max_depth: u16 = 65535;
         let call_sequence = Rc::new(RefCell::new(max_depth as u64));
 
         let data = ProtocolData {
@@ -650,7 +650,7 @@ mod test {
         {
             host_defined!(context, host_defined);
             let data = host_defined.get::<ProtocolData>().unwrap();
-            assert_eq!(data.depth, 255);
+            assert_eq!(data.depth, 65535);
         }
     }
 
@@ -704,22 +704,22 @@ mod test {
         let operation_hash = Blake2b::from(b"depth_overflow_test".as_ref());
         let addr = SmartFunctionHash::digest(b"test_addr").unwrap();
 
-        // Setup ProtocolData at max depth (254)
+        // Setup ProtocolData at max depth - 1 (65534)
         let call_sequence = Rc::new(RefCell::new(0u64));
-        let data_at_254 = ProtocolData {
+        let data_at_65534 = ProtocolData {
             address: addr.clone(),
             operation_hash: operation_hash.clone(),
             call_sequence: call_sequence.clone(),
-            depth: 254,
+            depth: 65534,
         };
 
         {
             host_defined!(context, mut host_defined);
-            host_defined.insert(data_at_254);
+            host_defined.insert(data_at_65534);
         }
 
-        // Attempt to nest one more level (254 → 255 should succeed)
-        let result_255 = {
+        // Attempt to nest one more level (65534 → 65535 should succeed)
+        let result_65535 = {
             let parent_depth = {
                 host_defined!(context, host_defined);
                 host_defined.get::<ProtocolData>().map(|d| d.depth)
@@ -729,22 +729,22 @@ mod test {
             parent_depth.checked_add(1)
         };
 
-        assert_eq!(result_255, Some(255), "Depth 254 → 255 should succeed");
+        assert_eq!(result_65535, Some(65535), "Depth 65534 → 65535 should succeed");
 
-        // Setup at depth 255 (u8::MAX)
-        let data_at_255 = ProtocolData {
+        // Setup at depth 65535 (u16::MAX)
+        let data_at_65535 = ProtocolData {
             address: addr.clone(),
             operation_hash: operation_hash.clone(),
             call_sequence: call_sequence.clone(),
-            depth: 255,
+            depth: 65535,
         };
 
         {
             host_defined!(context, mut host_defined);
-            host_defined.insert(data_at_255);
+            host_defined.insert(data_at_65535);
         }
 
-        // Attempt to nest one more level (255 → 256 should fail with None)
+        // Attempt to nest one more level (65535 → 65536 should fail with None)
         let result_overflow = {
             let parent_depth = {
                 host_defined!(context, host_defined);
@@ -757,7 +757,7 @@ mod test {
 
         assert_eq!(
             result_overflow, None,
-            "Depth 255 → 256 should overflow and return None (caught by checked_add)"
+            "Depth 65535 → 65536 should overflow and return None (caught by checked_add)"
         );
     }
 }

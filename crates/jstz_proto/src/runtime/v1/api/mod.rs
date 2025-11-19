@@ -21,7 +21,7 @@ pub struct ProtocolData {
     pub address: SmartFunctionHash,
     pub operation_hash: OperationHash,
     pub call_sequence: Rc<RefCell<u64>>,
-    pub depth: u8,
+    pub depth: u16,  // Max 65,535 - future-proof for any gas limit changes
 }
 
 // Manual Trace implementation since Rc<RefCell<u64>> doesn't implement Trace
@@ -48,7 +48,7 @@ pub struct ProtocolApi {
     pub address: SmartFunctionHash,
     pub operation_hash: OperationHash,
     pub call_sequence: Rc<RefCell<u64>>,
-    pub depth: u8,
+    pub depth: u16,
 }
 
 impl jstz_core::Api for ProtocolApi {

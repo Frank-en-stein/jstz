@@ -18,12 +18,12 @@ pub enum RequestEvent {
     Start {
         call_id: String,
         address: SmartFunctionHash,
-        depth: u8,
+        depth: u16,
     },
     End {
         call_id: String,
         address: SmartFunctionHash,
-        depth: u8,
+        depth: u16,
     },
 }
 
@@ -54,7 +54,7 @@ impl Display for ResponseEvent<'_> {
     }
 }
 
-pub fn log_request_start(call_id: String, address: SmartFunctionHash, depth: u8) {
+pub fn log_request_start(call_id: String, address: SmartFunctionHash, depth: u16) {
     runtime::with_js_hrt(|hrt| {
         log_request_start_with_host(hrt, call_id, address, depth);
     });
@@ -64,7 +64,7 @@ pub fn log_request_start_with_host(
     hrt: &mut JsHostRuntime<'static>,
     call_id: String,
     address: SmartFunctionHash,
-    depth: u8,
+    depth: u16,
 ) {
     let request_log = RequestEvent::Start {
         call_id,
@@ -76,7 +76,7 @@ pub fn log_request_start_with_host(
     hrt.write_debug(&(REQUEST_START_PREFIX.to_string() + &request_log + "\n"));
 }
 
-pub fn log_request_end(call_id: String, address: SmartFunctionHash, depth: u8) {
+pub fn log_request_end(call_id: String, address: SmartFunctionHash, depth: u16) {
     runtime::with_js_hrt(|hrt| {
         log_request_end_with_host(hrt, call_id, address, depth);
     });
@@ -86,7 +86,7 @@ pub fn log_request_end_with_host(
     hrt: &mut JsHostRuntime<'static>,
     call_id: String,
     address: SmartFunctionHash,
-    depth: u8,
+    depth: u16,
 ) {
     let request_log = RequestEvent::End {
         call_id,
