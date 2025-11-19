@@ -763,7 +763,6 @@ mod test {
 
     #[test]
     fn test_rollback_counter_persistence() {
-        use crate::runtime::v1::api::ProtocolData;
         use std::cell::RefCell;
         use std::rc::Rc;
 
