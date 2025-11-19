@@ -134,13 +134,27 @@ fn fetch(
     body: Option<Body>,
 ) -> Result<FetchReturn> {
     let url = Url::try_from(url.as_str())?;
-    let (tx, from, host, limiter) = {
+    let (tx, from, host, limiter, operation_hash, parent_call_sequence, parent_depth) = {
         let rt_context = state.borrow_mut::<RuntimeContext>();
+        // Extract parent context for nested call tracking
+        let operation_hash = if !rt_context.request_id.is_empty() {
+            // Extract operation hash from request_id (format: "op_hash:seq")
+            rt_context
+                .request_id
+                .split(':')
+                .next()
+                .and_then(|s| crate::operation::OperationHash::try_from(s).ok())
+        } else {
+            None
+        };
         (
             rt_context.tx.clone(),
             rt_context.address.clone(),
             JsHostRuntime::new(&mut rt_context.host),
             rt_context.slot.limiter(),
+            operation_hash,
+            rt_context.call_sequence.clone(),
+            rt_context.depth,
         )
     };
     let SourceAddress(source) = state.borrow::<SourceAddress>();
@@ -148,7 +162,7 @@ fn fetch(
         host,
         tx,
         false,
-        None,
+        operation_hash,
         source.clone(),
         from.clone().into(),
         method,
@@ -156,6 +170,8 @@ fn fetch(
         headers,
         body,
         limiter,
+        Some(parent_call_sequence),
+        parent_depth,
     );
     let fetch_request_resource = FetchRequestResource {
         future: Box::pin(fut),
@@ -196,6 +212,10 @@ pub async fn process_and_dispatch_request(
     data: Option<Body>,
     // Limits the number of smart function calls per `RunFunction` operation.
     limiter: Limiter,
+    // Parent's call sequence counter for nested call tracking (None for root calls)
+    parent_call_sequence: Option<Rc<RefCell<u64>>>,
+    // Parent's call depth for nested call tracking (0 for root calls)
+    parent_depth: u16,
 ) -> Response {
     let scheme = SupportedScheme::try_from(&url);
     let source = match SourceAddress::try_from(source) {
@@ -219,6 +239,8 @@ pub async fn process_and_dispatch_request(
                 data,
                 &mut is_successful,
                 limiter,
+                parent_call_sequence.clone(),
+                parent_depth,
             )
             .await;
             let _ =
@@ -350,11 +372,28 @@ async fn dispatch_run(
     data: Option<Body>,
     is_successful: &mut bool,
     limiter: Limiter,
+    parent_call_sequence: Option<Rc<RefCell<u64>>>,
+    parent_depth: u16,
 ) -> Result<Response> {
     let to = url.try_into();
     match to {
         Ok(HostName::Address(to)) => {
-            log_event(host, operation_hash, LogEvent::RequestStart(&to));
+            // Calculate call_id and depth for logging
+            let (call_id, depth) = match (operation_hash, &parent_call_sequence) {
+                (Some(op_hash), Some(parent_seq)) => {
+                    // Nested call: will increment in load_and_run, but need current value for logging
+                    let seq_num = *parent_seq.borrow() + 1;
+                    let child_depth = parent_depth + 1; // Safe since load_and_run checks overflow
+                    (format!("{}:{}", op_hash, seq_num), child_depth)
+                }
+                (Some(op_hash), None) => {
+                    // Root call
+                    (format!("{}:0", op_hash), 0u16)
+                }
+                _ => (String::new(), 0u16),
+            };
+
+            log_event_with_id(host, &to, &call_id, depth, true);
             let response = handle_address(
                 host,
                 tx,
@@ -368,9 +407,11 @@ async fn dispatch_run(
                 is_successful,
                 from,
                 limiter,
+                parent_call_sequence,
+                parent_depth,
             )
             .await;
-            log_event(host, operation_hash, LogEvent::RequestEnd(&to));
+            log_event_with_id(host, &to, &call_id, depth, false);
             response
         }
         Ok(HostName::JstzHost) if is_run_function => {
@@ -409,6 +450,8 @@ async fn handle_address(
     is_successful: &mut bool,
     from: Address,
     limiter: Limiter,
+    parent_call_sequence: Option<Rc<RefCell<u64>>>,
+    parent_depth: u16,
 ) -> Result<Response> {
     let mut headers = process_headers_and_transfer(tx, host, headers, &from, &to)?;
     headers.push((REFERER_HEADER_KEY.clone(), from.to_base58().into()));
@@ -440,6 +483,8 @@ async fn handle_address(
                 headers,
                 data,
                 limiter,
+                parent_call_sequence,
+                parent_depth,
             )
             .await;
 
@@ -489,6 +534,8 @@ async fn load_and_run(
     headers: Vec<(ByteString, ByteString)>,
     body: Option<Body>,
     limiter: Limiter,
+    parent_call_sequence: Option<Rc<RefCell<u64>>>,
+    parent_depth: u16,
 ) -> Result<Response> {
     let slot = limiter.try_acquire().map_err(|_| {
         // Protocol guard: this is not a true JS/native stack overflow.
@@ -507,13 +554,49 @@ async fn load_and_run(
     })?;
     let mut body = body;
 
-    // 0. Prepare Protocol
+    // 0. Prepare Protocol with nested call tracking
+    let (call_sequence, depth, call_id) = match (operation_hash, parent_call_sequence) {
+        (Some(op_hash), Some(parent_seq)) => {
+            // Nested call: increment sequence and depth
+            let seq_num = {
+                let mut seq = parent_seq.borrow_mut();
+                *seq += 1;
+                *seq
+            };
+
+            // Check for depth overflow
+            let child_depth = parent_depth.checked_add(1).ok_or_else(|| {
+                FetchError::JstzError(format!(
+                    "Maximum call depth exceeded: attempted {} (limit: {})",
+                    parent_depth as u64 + 1,
+                    u16::MAX
+                ))
+            })?;
+
+            (
+                parent_seq.clone(),
+                child_depth,
+                format!("{}:{}", op_hash, seq_num),
+            )
+        }
+        (Some(op_hash), None) => {
+            // Root call: create new sequence counter
+            (Rc::new(RefCell::new(0u64)), 0u16, format!("{}:0", op_hash))
+        }
+        _ => {
+            // No operation hash means no tracking
+            (Rc::new(RefCell::new(0u64)), 0u16, String::new())
+        }
+    };
+
     let mut proto = RuntimeContext::new(
         host,
         tx,
         address.clone(),
-        operation_hash.map(|v| v.to_string()).unwrap_or_default(),
+        call_id.clone(),
         slot,
+        call_sequence.clone(),
+        depth,
     );
     // 1. Load script
     let script = { load_script(tx, &mut proto.host, &proto.address)? };
@@ -735,6 +818,35 @@ enum LogEvent<'a> {
     Response((&'a Url, &'a Response)),
 }
 
+/// Log request start/end with actual call_id and depth values
+fn log_event_with_id(
+    host: &mut JsHostRuntime<'static>,
+    address: &Address,
+    call_id: &str,
+    depth: u16,
+    is_start: bool,
+) {
+    if !call_id.is_empty() {
+        if let Address::SmartFunction(smart_function_addr) = address {
+            if is_start {
+                log_request_start_with_host(
+                    host,
+                    call_id.to_string(),
+                    smart_function_addr.clone(),
+                    depth,
+                )
+            } else {
+                log_request_end_with_host(
+                    host,
+                    call_id.to_string(),
+                    smart_function_addr.clone(),
+                    depth,
+                )
+            }
+        }
+    }
+}
+
 fn log_event(
     host: &mut JsHostRuntime<'static>,
     op_hash: Option<&OperationHash>,
@@ -744,7 +856,8 @@ fn log_event(
         match event {
             LogEvent::RequestStart(address) => {
                 if let Address::SmartFunction(smart_function_addr) = &address {
-                    // V2 runtime: use operation hash as call_id with sequence 0 and depth 0
+                    // Note: This is only used for non-smart-function calls now
+                    // Smart function calls use log_event_with_id with proper tracking
                     log_request_start_with_host(
                         host,
                         format!("{}:0", op),
@@ -755,7 +868,8 @@ fn log_event(
             }
             LogEvent::RequestEnd(address) => {
                 if let Address::SmartFunction(smart_function_addr) = &address {
-                    // V2 runtime: use operation hash as call_id with sequence 0 and depth 0
+                    // Note: This is only used for non-smart-function calls now
+                    // Smart function calls use log_event_with_id with proper tracking
                     log_request_end_with_host(
                         host,
                         format!("{}:0", op),
@@ -866,6 +980,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -943,6 +1059,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -985,6 +1103,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1024,6 +1144,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1067,6 +1189,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1103,6 +1227,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1181,6 +1307,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1237,6 +1365,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1285,6 +1415,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1349,6 +1481,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1436,6 +1570,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1483,6 +1619,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1526,6 +1664,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
             assert_eq!(response.status, 200);
@@ -1574,6 +1714,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1624,6 +1766,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1671,6 +1815,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -1712,6 +1858,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -2051,6 +2199,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -2133,6 +2283,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -2216,6 +2368,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -2345,6 +2499,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
