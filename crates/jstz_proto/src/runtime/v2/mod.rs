@@ -66,6 +66,8 @@ async fn run(
         convert_header_map(headers),
         body,
         Limiter::default(),
+        None, // Root call: no parent sequence
+        0,    // Root call: depth 0
     )
     .await
     .into();

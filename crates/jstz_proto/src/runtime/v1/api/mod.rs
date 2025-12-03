@@ -2,10 +2,10 @@ mod kv;
 mod ledger;
 mod smart_function;
 
-use std::ops::BitXor;
+use std::{cell::RefCell, ops::BitXor, rc::Rc};
 
 use boa_engine::JsData;
-use boa_gc::{Finalize, Trace};
+use boa_gc::{empty_trace, Finalize, Trace};
 use jstz_core::host_defined;
 use jstz_crypto::{hash::Hash, smart_function_hash::SmartFunctionHash};
 use kv::KvApi;
@@ -16,10 +16,24 @@ use crate::{operation::OperationHash, runtime::v1::api};
 
 pub use kv::{Kv, KvValue};
 
-#[derive(Trace, Finalize, JsData)]
+#[derive(Clone, Finalize, JsData)]
 pub struct ProtocolData {
     pub address: SmartFunctionHash,
     pub operation_hash: OperationHash,
+    /// Shared sequence counter for nested call tracking within an operation
+    pub call_sequence: Rc<RefCell<u64>>,
+    /// Current call depth (0 = root call, 1 = first nested call, etc.)
+    /// Max 65,535 - future-proof for any gas limit changes
+    pub depth: u16,
+}
+
+// Manual Trace implementation since Rc<RefCell<u64>> doesn't implement Trace.
+// This is safe because:
+// 1. The u64 counter is not a GC-managed object
+// 2. Rc itself doesn't contain GC references
+// 3. The counter is used only for tracing/logging, not GC-sensitive data
+unsafe impl Trace for ProtocolData {
+    empty_trace!();
 }
 
 pub struct WebApi;
@@ -40,6 +54,10 @@ impl jstz_core::Api for WebApi {
 pub struct ProtocolApi {
     pub address: SmartFunctionHash,
     pub operation_hash: OperationHash,
+    /// Shared sequence counter for nested call tracking within an operation
+    pub call_sequence: Rc<RefCell<u64>>,
+    /// Current call depth (0 = root call, 1 = first nested call, etc.)
+    pub depth: u16,
 }
 
 impl jstz_core::Api for ProtocolApi {
@@ -50,6 +68,8 @@ impl jstz_core::Api for ProtocolApi {
         host_defined.insert(ProtocolData {
             address: self.address.clone(),
             operation_hash: self.operation_hash.clone(),
+            call_sequence: self.call_sequence.clone(),
+            depth: self.depth,
         });
 
         jstz_api::RandomApi {

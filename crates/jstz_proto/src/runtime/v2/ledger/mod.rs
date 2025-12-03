@@ -98,6 +98,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 
@@ -138,6 +140,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
             // Assert
@@ -180,6 +184,8 @@ mod test {
                 vec![],
                 None,
                 Limiter::default(),
+                None, // Root call: no parent sequence
+                0,    // Root call: depth 0
             )
             .await;
 

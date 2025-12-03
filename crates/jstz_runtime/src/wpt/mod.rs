@@ -3,6 +3,9 @@
 //! Provides test status enums, result and report structures, runtime operations and integration
 //! for running WPT tests within the JSTZ kernel.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::{
     runtime::{Limiter, MAX_SMART_FUNCTION_CALL_COUNT},
     JstzRuntime, JstzRuntimeOptions, RuntimeContext,
@@ -305,6 +308,8 @@ pub fn init_runtime(host: &mut impl HostRuntime, tx: &mut Transaction) -> JstzRu
             address,
             String::new(),
             limiter.try_acquire().unwrap(),
+            Rc::new(RefCell::new(0u64)), // Root call sequence
+            0u16,                          // Root depth
         )),
         extensions: vec![test_harness_api::init_ops_and_esm()],
         ..Default::default()

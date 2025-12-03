@@ -22,6 +22,7 @@ use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::{
+    cell::RefCell,
     future::Future,
     ops::{Deref, DerefMut},
     pin::Pin,
@@ -392,6 +393,10 @@ pub struct RuntimeContext {
     pub request_id: String,
     /// The slot acquired from the limiter to limit the number of smart function calls.
     pub slot: Slot,
+    /// Shared sequence counter for nested call tracking within an operation
+    pub call_sequence: Rc<RefCell<u64>>,
+    /// Current call depth (0 = root call, 1 = first nested call, etc.)
+    pub depth: u16,
 }
 
 impl RuntimeContext {
@@ -401,6 +406,8 @@ impl RuntimeContext {
         address: SmartFunctionHash,
         request_id: String,
         slot: Slot,
+        call_sequence: Rc<RefCell<u64>>,
+        depth: u16,
     ) -> Self {
         let host = JsHostRuntime::new(hrt);
         RuntimeContext {
@@ -410,6 +417,8 @@ impl RuntimeContext {
             address,
             request_id,
             slot,
+            call_sequence,
+            depth,
         }
     }
 }

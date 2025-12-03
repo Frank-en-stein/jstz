@@ -3,9 +3,9 @@ use std::fs;
 
 use super::Line;
 use anyhow::{anyhow, Result};
-use jstz_core::log_record::LogLevel;
-use jstz_crypto::public_key_hash::PublicKeyHash;
-use jstz_proto::{context::account::Address, js_logger::LogRecord, logger::RequestEvent};
+use jstz_core::log_record::{LogLevel, LogRecord};
+use jstz_crypto::{hash::Hash, smart_function_hash::SmartFunctionHash};
+use jstz_proto::{context::account::Address, logger::RequestEvent};
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Params, Statement};
@@ -72,11 +72,12 @@ impl Db {
         let connection = self.connection().await?;
         match line {
             Line::Request(RequestEvent::Start {
-                request_id,
+                call_id,
                 address,
+                depth: _,
             }) => connection.execute(
                 "INSERT INTO request (id, function_address) VALUES (?1, ?2)",
-                (request_id, address.to_string()),
+                (call_id, address.to_string()),
             )?,
             Line::Js(LogRecord {
                 request_id,
@@ -149,7 +150,7 @@ impl Db {
                 level: LogLevel::try_from(level.as_str())
                     .map_err(|e| anyhow!(e.to_string()))?,
                 text,
-                address: PublicKeyHash::from_base58(address.as_str())?,
+                address: SmartFunctionHash::from_base58(address.as_str())?,
                 request_id,
             };
             logs.push(log_record)
